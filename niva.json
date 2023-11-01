@@ -1,0 +1,16 @@
+{
+  "name": "allegro一键解析",
+  "uuid": "2e3cf745-3093-4012-8fed-688aafe5e9e3",
+  "debug": {
+    "entry": "http://localhost:5173",
+    "resource": "public"
+  },
+  "build": {
+    "resource": "dist"
+  },
+  "window": {
+    "resizable": false,
+    "size": { "width": 800, "height": 630 },
+    "devtools": true
+  }
+}
