@@ -1,5 +1,5 @@
 {
-  "name": "allegro一键解析",
+  "name": "allegro",
   "uuid": "2e3cf745-3093-4012-8fed-688aafe5e9e3",
   "debug": {
     "entry": "http://localhost:5173",

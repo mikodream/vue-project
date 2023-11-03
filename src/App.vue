@@ -1,8 +1,25 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, onBeforeMount } from 'vue'
 import ExcelJS from 'exceljs'
-import { collapseTextChangeRangesAcrossMultipleVersions } from 'typescript'
 import { Buffer } from 'buffer'
+
+import md5 from 'js-md5'
+
+let currentDir = ''
+// @ts-ignore
+const sep = Niva.api.os.sep().then((s) => {
+  console.log(sep)
+  // @ts-ignore
+  Niva.api.process.currentExe().then((dir) => {
+    currentDir = getLeftOfFixedTextLast(dir, s)
+    console.log(dir, currentDir)
+  })
+})
+
+//是否需要校验
+const verify = ref(true)
+//卡号
+const cardId = ref('')
 
 const columns = [
   { prop: 'name', label: '商品名', width: '100' },
@@ -17,17 +34,9 @@ var clickbutton = function () {
   Niva.api.clipboard.read().then((data: string) => {
     dataArrays.length = 0
     const separator = 'data-analytics-view-custom-deliverylabel="'
-    const shopSeparatorHeader = 'title="">'
-    const shopSeparatorFooter = '</a></h2>'
-    //商品类
-    const shopTypeSeparatorHeader = 'dostawa za 17 – 24 dni" '
-    const shopTypeSeparatorFooter = 'data-variants-visible="true"'
     //商品名字
-    const shopNameSeparatorHeader = 'dostawa za 19 – 21 dni" aria-label="'
+    const shopNameSeparatorHeader = 'aria-label="'
     const shopNameSeparatorFooter = '"><div><div'
-    //商品价格
-    const shopPriceSeparatorHeader = 'mgn2_30_s" aria-label="'
-    const shopPriceSeparatorFooter = ' z? aktualna cena'
     //商品地址
     const shopHrefSeparatorHeader = ' " href="'
     const shopHrefSeparatorFooter = '" title='
@@ -38,7 +47,6 @@ var clickbutton = function () {
     const html = data
 
     const sepaAarrays = html.split(separator)
-
     for (const tempText of sepaAarrays) {
       const nameAndPrice = getCenterOfFixedText(
         tempText,
@@ -71,16 +79,15 @@ var clickbutton = function () {
 
         const ss = Buffer.from(data)
         const base64String = ss.toString('base64')
-        // const byteArray = Array.from(new Uint8Array(data))
-        // 使用btoa()将字节数组转换为base64编码的字符串
-        // const base64String = window.btoa(String.fromCharCode.apply(null, byteArray))
+
+        const writeDri = currentDir + '/' + getDateString() + '.xlsx'
         // @ts-ignore
-        Niva.api.dialog.pickDir().then((dir: Promise<string>) => {
-          const writeDri = dir + '/' + getDateString() + '.xlsx'
-          console.log('写出的 base64 数据', base64String)
-          // @ts-ignore
-          Niva.api.fs.write(writeDri, base64String, 'base64')
-        })
+        Niva.api.fs.write(writeDri, base64String, 'base64')
+
+        // // @ts-ignore
+        // Niva.api.dialog.pickDir().then((dir: Promise<string>) => {
+
+        // })
       })
       //
     }
@@ -143,6 +150,14 @@ function getLeftOfFixedText(inputText: string, fixedText: string) {
   return '' // 如果没有找到固定文本，可以根据需求返回 null 或其他值
 }
 
+function getLeftOfFixedTextLast(inputText: string, fixedText: string) {
+  const index = inputText.lastIndexOf(fixedText)
+  if (index !== -1) {
+    return inputText.substring(0, index)
+  }
+  return '' // 如果没有找到固定文本，可以根据需求返回 null 或其他值
+}
+
 function getRightOfFixedText(inputText: string, fixedText: string) {
   const index = inputText.indexOf(fixedText)
   if (index !== -1) {
@@ -156,22 +171,127 @@ interface DataObj {
   price: string
   sales: string
 }
+
+onBeforeMount(() => {
+  // @ts-ignore
+  Niva.api.fs.exists(currentDir+'/key.json').then(async (result) => {
+    if (result) {
+      verifyFile()
+    }
+  })
+})
+
+const onSubmit = () => {
+  let machineId = generateUUID()
+  let json = JSON.stringify({ machineId: machineId, cardId: cardId.value })
+  console.log(json)
+  // @ts-ignore
+  Niva.api.fs.write(currentDir+'/key.json', json).then(() => {
+    verifyFile()
+  })
+}
+
+const onCancel = () => {
+  // @ts-ignore
+  Niva.api.process.exit()
+}
+
+function generateUUID() {
+  return 'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    var r = (Math.random() * 16) | 0,
+      v = c == 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
+
+async function verifyFile() {
+  // @ts-ignore
+  let json = await Niva.api.fs.read(currentDir+'/key.json')
+  let jsonObject = JSON.parse(json)
+
+  let response = await verifyCard(jsonObject.machineId, jsonObject.cardId)
+  console.log(response.body)
+  let result = JSON.parse(response.body)
+  if (result.code === 0) {
+    verify.value = false
+  } else {
+    // @ts-ignore
+    Niva.api.dialog.showMessage('程序校验失败,请联系供应商获取卡号', result.data.error_msg, 'error')
+  }
+}
+
+async function verifyCard(card: string, machine_code: string) {
+  let http_method = 'POST'
+  let host = 'api.ssdun.cn:8520'
+  let path = '/V4/card/verify'
+  let user_key = '529a53ab7fc09d77a7eb9875a1d1f3c3d69be63b93985738e2941a9f1a2f8ec1'
+  let app_secret = '4262'
+  let timestamp = Date.now() / 1000
+  let params =
+    'user_key=' +
+    user_key +
+    '&app_secret=' +
+    app_secret +
+    '&card=' +
+    card +
+    '&machine_code=' +
+    machine_code +
+    '&timestamp=' +
+    timestamp
+  let sign = md5.md5(http_method + host + path + params + app_secret).toUpperCase()
+  let body = {
+    user_key: user_key,
+    app_secret: app_secret,
+    card: card,
+    machine_code: machine_code,
+    timestamp: timestamp,
+    sign: sign
+  }
+
+  console.log(sign)
+  // @ts-ignore
+  return await Niva.api.http.request({
+    method: http_method,
+    url: 'http://' + host + path,
+    body: body
+  })
+}
+
+function niva() {
+  // @ts-ignore
+  return Niva
+}
 </script>
 
 <template>
-  <div>
-    <el-button @click="clickbutton">复制网页源码后点此按钮</el-button>
+  <div v-if="verify" style="background-color: whitesmoke">
+    <el-card>
+      <el-form>
+        <el-form-item label="卡号">
+          <el-input v-model="cardId"></el-input>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="onSubmit">立即创建</el-button>
+          <el-button @click="onCancel">取消</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
   </div>
+  <div v-else>
+    <div>
+      <el-button @click="clickbutton">复制网页源码后点此按钮</el-button>
+    </div>
 
-  <div>
-    <el-table :data="tableData">
-      <el-table-column
-        v-for="column in columns"
-        :prop="column.prop"
-        :label="column.label"
-        :width="column.width"
-      />
-    </el-table>
+    <div>
+      <el-table :data="tableData">
+        <el-table-column
+          v-for="column in columns"
+          :prop="column.prop"
+          :label="column.label"
+          :width="column.width"
+        />
+      </el-table>
+    </div>
   </div>
 </template>
 
