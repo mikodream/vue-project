@@ -4,13 +4,15 @@ import ExcelJS from 'exceljs'
 import { Buffer } from 'buffer'
 
 import md5 from 'js-md5'
-
-let currentDir = ''
-// @ts-ignore
-const sep = Niva.api.os.sep().then((s) => {
-  console.log(sep)
+const $ = {
   // @ts-ignore
-  Niva.api.process.currentExe().then((dir) => {
+  niva: Niva,
+
+}
+let currentDir = ''
+const sep = $.niva.api.os.sep().then((s:string) => {
+  console.log(sep)
+  $.niva.api.process.currentExe().then((dir:string) => {
     currentDir = getLeftOfFixedTextLast(dir, s)
     console.log(dir, currentDir)
   })
@@ -30,8 +32,7 @@ const columns = [
 const tableData = reactive([{}])
 let dataArrays: DataObj[] = []
 var clickbutton = function () {
-  // @ts-ignore
-  Niva.api.clipboard.read().then((data: string) => {
+  $.niva.api.clipboard.read().then((data: string) => {
     dataArrays.length = 0
     const separator = 'data-analytics-view-custom-deliverylabel="'
     //商品名字
@@ -71,8 +72,7 @@ var clickbutton = function () {
     tableData.length = 0
     tableData.push(...dataArrays)
     if (tableData.length === 0) {
-      // @ts-ignore
-      Niva.api.dialog.showMessage('解析异常', '解析失败，解析到的结果为 0 个')
+      $.niva.api.dialog.showMessage('解析异常', '解析失败，解析到的结果为 0 个')
     } else {
       exportExcel().then((data) => {
         // 创建一个字节数组
@@ -81,13 +81,7 @@ var clickbutton = function () {
         const base64String = ss.toString('base64')
 
         const writeDri = currentDir + '/' + getDateString() + '.xlsx'
-        // @ts-ignore
-        Niva.api.fs.write(writeDri, base64String, 'base64')
-
-        // // @ts-ignore
-        // Niva.api.dialog.pickDir().then((dir: Promise<string>) => {
-
-        // })
+        $.niva.api.fs.write(writeDri, base64String, 'base64')
       })
       //
     }
@@ -129,7 +123,7 @@ async function exportExcel() {
   const buffer = await workbook.xlsx.writeBuffer()
   return buffer
 }
-
+//取文本中间
 function getCenterOfFixedText(inputText: string, fixedTextHeader: string, fixedTextFooter: string) {
   const headerIndex = inputText.indexOf(fixedTextHeader)
   if (headerIndex !== -1) {
@@ -141,7 +135,7 @@ function getCenterOfFixedText(inputText: string, fixedTextHeader: string, fixedT
   }
   return ''
 }
-
+//取文本左边
 function getLeftOfFixedText(inputText: string, fixedText: string) {
   const index = inputText.indexOf(fixedText)
   if (index !== -1) {
@@ -149,7 +143,7 @@ function getLeftOfFixedText(inputText: string, fixedText: string) {
   }
   return '' // 如果没有找到固定文本，可以根据需求返回 null 或其他值
 }
-
+//倒序取文本左边
 function getLeftOfFixedTextLast(inputText: string, fixedText: string) {
   const index = inputText.lastIndexOf(fixedText)
   if (index !== -1) {
@@ -157,7 +151,7 @@ function getLeftOfFixedTextLast(inputText: string, fixedText: string) {
   }
   return '' // 如果没有找到固定文本，可以根据需求返回 null 或其他值
 }
-
+//取文本右边
 function getRightOfFixedText(inputText: string, fixedText: string) {
   const index = inputText.indexOf(fixedText)
   if (index !== -1) {
@@ -173,8 +167,7 @@ interface DataObj {
 }
 
 onBeforeMount(() => {
-  // @ts-ignore
-  Niva.api.fs.exists(currentDir+'/key.json').then(async (result) => {
+  $.niva.api.fs.exists(currentDir+'/key.json').then(async (result:boolean) => {
     if (result) {
       verifyFile()
     }
@@ -185,17 +178,15 @@ const onSubmit = () => {
   let machineId = generateUUID()
   let json = JSON.stringify({ machineId: machineId, cardId: cardId.value })
   console.log(json)
-  // @ts-ignore
-  Niva.api.fs.write(currentDir+'/key.json', json).then(() => {
+  $.niva.api.fs.write(currentDir+'/key.json', json).then(() => {
     verifyFile()
   })
 }
 
 const onCancel = () => {
-  // @ts-ignore
-  Niva.api.process.exit()
+  $.niva.api.process.exit()
 }
-
+//生成 uuid
 function generateUUID() {
   return 'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     var r = (Math.random() * 16) | 0,
@@ -203,23 +194,20 @@ function generateUUID() {
     return v.toString(16)
   })
 }
-
+//验证文件
 async function verifyFile() {
-  // @ts-ignore
-  let json = await Niva.api.fs.read(currentDir+'/key.json')
+  let json = await $.niva.api.fs.read(currentDir+'/key.json')
   let jsonObject = JSON.parse(json)
-
   let response = await verifyCard(jsonObject.machineId, jsonObject.cardId)
   console.log(response.body)
   let result = JSON.parse(response.body)
   if (result.code === 0) {
     verify.value = false
   } else {
-    // @ts-ignore
-    Niva.api.dialog.showMessage('程序校验失败,请联系供应商获取卡号', result.data.error_msg, 'error')
+    $.niva.api.dialog.showMessage('程序校验失败,请联系供应商获取卡号', result.data.error_msg, 'error')
   }
 }
-
+//卡密验证
 async function verifyCard(card: string, machine_code: string) {
   let http_method = 'POST'
   let host = 'api.ssdun.cn:8520'
@@ -250,17 +238,13 @@ async function verifyCard(card: string, machine_code: string) {
 
   console.log(sign)
   // @ts-ignore
-  return await Niva.api.http.request({
+  return await $.niva.api.http.request({
     method: http_method,
     url: 'http://' + host + path,
     body: body
   })
 }
 
-function niva() {
-  // @ts-ignore
-  return Niva
-}
 </script>
 
 <template>
